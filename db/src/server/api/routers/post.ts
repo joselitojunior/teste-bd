@@ -22,7 +22,6 @@ export const postRouter = createTRPCRouter({
 	releaseResult: publicProcedure
 		.input(z.any())
 		.mutation(async (opts: any) => {
-			console.time('total');
 			// Get data from Supabase
 			const awards = await prisma.award.findMany();
 
@@ -100,6 +99,7 @@ export const postRouter = createTRPCRouter({
 			// Insert data
 			if (leagueIds) {
 				var transactions: any = [];
+				var transactions2: any = [];
 				const userAwardsMoney: any = {};
 				const userAwardsBonus: any = {};
 
@@ -177,7 +177,7 @@ export const postRouter = createTRPCRouter({
 
 					participationsWithAwards.map((participation: any) => {
 						// Update participations
-						transactions.push(prisma.participation.update({
+						transactions2.push(prisma.participation.update({
 							where: { id: participation.id },
 							data: {
 								point: participation.score,
@@ -236,6 +236,7 @@ export const postRouter = createTRPCRouter({
 					}));
 				});
 
+
 				const userAwardsMoneyList = Object.keys(userAwardsMoney).map((key: string) => {
 					return {
 						clerkId: key,
@@ -255,21 +256,28 @@ export const postRouter = createTRPCRouter({
 					select: ['clerkId', 'money', 'bonus'],
 				});
 
-				userAwardsMoneyList.map((userAward: any) => {
+				userAwardsMoneyList.map((userAward: any, index: number) => {
 					const previousMoney = usersBalance?.find((user: any) => user.clerkId == userAward.clerkId)?.money;
 					const newMoney = previousMoney + userAward.value;
-					transactions.push(prisma.user.update({
+
+					if (index == 41) {
+						console.log(previousMoney, newMoney, userAward.clerkId, userAward.value);
+					}
+
+					// if (index !== 41) {
+					transactions2.push(prisma.user.update({
 						where: { clerkId: userAward.clerkId },
 						data: {
 							money: newMoney,
 						},
 					}));
+					// }
 				});
 
 				userAwardsBonusList.map((userAward: any) => {
 					const previousBonus = usersBalance?.find((user: any) => user.clerkId == userAward.clerkId)?.bonus;
 					const newBonus = previousBonus + userAward.value;
-					transactions.push(prisma.user.update({
+					transactions2.push(prisma.user.update({
 						where: { clerkId: userAward.clerkId },
 						data: {
 							bonus: newBonus,
@@ -277,15 +285,34 @@ export const postRouter = createTRPCRouter({
 					}));
 				});
 
-				const promises = transactions.map(async (transaction: any) => {
+				console.log('transactions: ', transactions.length);
+
+				console.time('transactions');
+
+				const promises = transactions.map(async (transaction: any, index: number) => {
 					const result = await transaction;
 					return result;
 				})
 
 				await Promise.all(promises);
+
+				console.timeEnd('transactions');
+
+				console.time('transactions2');
+				const transactions2Filtered = transactions2.filter((tr: any, index: number) => index < 60)
+
+				console.log('transactions2: ', transactions2.length);
+
+				const promises2 = transactions2.map(async (transaction: any, index: number) => {
+					const result = await transaction;
+					return result;
+				})
+
+				await Promise.all(promises2);
+
+				console.timeEnd('transactions2');
 			}
 
-			console.timeEnd('total');
 
 			return 'ok';
 		}),
