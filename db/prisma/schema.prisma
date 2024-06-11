@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model BonusTransaction {
+  id       BigInt    @id @default(autoincrement())
+  clerkId  String
+  value    Float?    @db.Real
+  type     String?   @db.VarChar
+  datetime DateTime? @db.Timestamp(6)
+}
+
+model Charge {
+  id                   Int      @id(map: "MoneyData_pkey") @default(autoincrement())
+  data                 DateTime @db.Timestamptz(6)
+  txid                 String?
+  status               String?
+  solicitacaoDoPagador String?
+  valor                Float?   @db.Real
+  clerkId              String?
+  coupon_id            Int?
+  Coupon               Coupon?  @relation(fields: [coupon_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Coupon {
+  id            Int           @id @default(autoincrement())
+  code          String
+  affiliate     String?
+  first_deposit Boolean?
+  percentage    Float?        @db.Real
+  isActive      Boolean?
+  Charge        Charge[]
+  User_Coupon   User_Coupon[]
+}
+
+model League {
+  id               Int             @id @default(autoincrement())
+  name             String          @db.VarChar
+  totalAward       Float           @db.Real
+  start            DateTime        @db.Timestamptz(6)
+  maxParticipants  Int?
+  price            Float           @db.Real
+  championshipId   Int
+  end              DateTime        @db.Timestamptz(6)
+  initialBudget    Float           @db.Real
+  order            Int?
+  week             Int
+  splitId          Int
+  numbersOfWinners Int
+  isActive         Boolean         @default(true)
+  isAwardBonus     Boolean         @default(false)
+  championship     championship    @relation(fields: [championshipId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "League_championshipId_fkey1")
+  split            split           @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  award            award[]
+  participation    participation[]
+}
+
+model MoneyBalance {
+  id          Int         @id @default(autoincrement())
+  sourceId    Int
+  amount      Float?      @db.Real
+  MoneySource MoneySource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model MoneySource {
+  id             Int            @id @default(autoincrement())
+  source         String
+  isWithdrawable Boolean?
+  MoneyBalance   MoneyBalance[]
+}
+
+model MoneyTransaction {
+  id       Int      @id @default(autoincrement())
+  value    Float
+  clerkId  String?
+  type     String
+  datetime DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model Notification {
+  id       Int       @id @default(autoincrement())
+  userId   String
+  read     Boolean?  @default(false)
+  datetime DateTime? @default(now()) @db.Timestamptz(6)
+  image    String    @default("")
+  message  String
+  User     User      @relation(fields: [userId], references: [clerkId], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Odds {
+  id      Int   @id(map: "Odd_pkey") @default(autoincrement())
+  game_2  Float
+  week    Int
+  game_1  Float
+  splitId Int
+  teamId  Int
+  split   split @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team    team  @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Player {
+  id            Int             @id @default(autoincrement())
+  name          String          @db.VarChar
+  price         Float?
+  kda           Float           @db.Real
+  csm           Float           @db.Real
+  solo_kills    Float           @db.Real
+  dpm           Float           @db.Real
+  vspm          Float           @db.Real
+  kp            Float           @db.Real
+  score         Float
+  teamId        Int
+  laneId        Int
+  week          Int
+  splitId       Int
+  gd15          Int
+  gpm           Int
+  round         Int?
+  lane          lane            @relation(fields: [laneId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Player_laneId_fkey1")
+  split         split           @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team          team            @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Player_teamId_fkey1")
+  UserTeam      UserTeam[]
+  participation participation[]
+}
+
+model Reserve {
+  id      Int     @id @default(autoincrement())
+  name    String
+  reserve String?
+  splitId Int?
+  split   split?  @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model SendPix {
+  id       BigInt   @id @default(autoincrement())
+  clerkId  String
+  value    Float
+  key      String
+  sent     Boolean  @default(false)
+  datetime DateTime @default(now()) @db.Timestamptz(6)
+  userName String
+}
+
+model Transaction {
+  id          Int       @id(map: "ChargeApproved_pkey") @default(autoincrement())
+  endToEndId  String
+  txid        String?
+  valor       Float?
+  chave       String?
+  horario     DateTime? @db.Timestamptz(6)
+  infoPagador String?
+  clerkId     String?
+}
+
+model User {
+  id           Int            @id @default(autoincrement())
+  phone        String
+  clerkId      String?        @unique
+  birth        DateTime?      @db.Date
+  cpf          String?
+  money        Float          @default(0)
+  bonus        Float          @default(0)
+  Notification Notification[]
+  User_Coupon  User_Coupon[]
+}
+
+model UserTeam {
+  id              Int           @id @default(autoincrement())
+  participationId Int
+  playerId        Int?
+  participation   participation @relation(fields: [participationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "UserTeam_participationId_fkey1")
+  Player          Player?       @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "UserTeam_playerId_fkey1")
+}
+
+model User_Coupon {
+  id         BigInt   @id @default(autoincrement())
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user_id    String
+  coupon_id  Int?
+  Coupon     Coupon?  @relation(fields: [coupon_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User       User     @relation(fields: [user_id], references: [clerkId], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Weight {
+  id         BigInt @id @default(autoincrement())
+  lane       String
+  kda        Int    @db.SmallInt
+  csm        Int    @db.SmallInt
+  kp         Int    @db.SmallInt
+  dpm        Int    @db.SmallInt
+  vspm       Int    @db.SmallInt
+  solo_kills Int    @db.SmallInt
+  gpm        Int    @db.SmallInt
+  gd15       Float  @db.Real
+}
+
+model award {
+  id       Int    @id(map: "Award_pkey") @default(autoincrement())
+  leagueId Int
+  position Int
+  award    Float
+  League   League @relation(fields: [leagueId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Award_leagueId_fkey")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model bonus_transaction {
+  id       BigInt    @id @default(autoincrement())
+  clerkId  String
+  value    Float?    @db.Real
+  type     String?   @db.VarChar
+  datetime DateTime? @db.Timestamp(6)
+}
+
+model championship {
+  id     Int      @id(map: "Championship_pkey") @default(autoincrement())
+  name   String   @db.VarChar
+  image  String?
+  year   Int
+  League League[]
+  league league[]
+  split  split[]
+}
+
+model game {
+  id                       Int      @id(map: "Games_pkey") @default(autoincrement())
+  team01Id                 Int
+  team02Id                 Int?
+  datetime                 DateTime @db.Timestamptz(6)
+  splitId                  Int
+  week                     Int
+  split                    split    @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Game_splitId_fkey")
+  team_game_team01IdToteam team     @relation("game_team01IdToteam", fields: [team01Id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Game_team01Id_fkey1")
+  team_game_team02IdToteam team?    @relation("game_team02IdToteam", fields: [team02Id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Game_team02Id_fkey1")
+}
+
+model lane {
+  id     Int      @id(map: "Lane_pkey") @default(autoincrement())
+  name   String
+  image  String?
+  Player Player[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model league {
+  id               Int          @id(map: "league_duplicate_pkey") @default(autoincrement())
+  name             String       @db.VarChar
+  totalAward       Float        @db.Real
+  start            DateTime     @db.Timestamptz(6)
+  maxParticipants  Int?
+  price            Float        @db.Real
+  championshipId   Int
+  end              DateTime     @db.Timestamptz(6)
+  initialBudget    Float        @db.Real
+  order            Int?
+  week             Int
+  splitId          Int
+  numbersOfWinners Int
+  isActive         Boolean      @default(true)
+  championship     championship @relation(fields: [championshipId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  split            split        @relation(fields: [splitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model money_transaction {
+  id       Int      @id(map: "MoneyTransaction_duplicate_pkey") @default(autoincrement())
+  value    Float
+  clerkId  String?
+  type     String
+  datetime DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model participation {
+  id       Int        @id(map: "Participation_pkey") @default(autoincrement())
+  userId   String
+  leagueId Int
+  point    Float?
+  money    Float?
+  date     DateTime?  @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @db.Timestamptz(6)
+  kingId   Int
+  position Decimal?   @db.Decimal
+  payment  String     @default("money")
+  bonus    Float?     @db.Real
+  UserTeam UserTeam[]
+  Player   Player     @relation(fields: [kingId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Participation_kingId_fkey1")
+  League   League     @relation(fields: [leagueId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Participation_leagueId_fkey1")
+}
+
+model split {
+  id             Int          @id(map: "Split_pkey") @default(autoincrement())
+  split          Int
+  championshipId Int
+  start          DateTime     @db.Timestamptz(6)
+  League         League[]
+  Odds           Odds[]
+  Player         Player[]
+  Reserve        Reserve[]
+  game           game[]
+  league         league[]
+  championship   championship @relation(fields: [championshipId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Split_championshipId_fkey1")
+}
+
+model team {
+  id                       Int      @id(map: "Team_pkey") @default(autoincrement())
+  name                     String   @unique(map: "Team_name_key") @db.VarChar
+  logo                     String   @db.VarChar
+  Odds                     Odds[]
+  Player                   Player[]
+  game_game_team01IdToteam game[]   @relation("game_team01IdToteam")
+  game_game_team02IdToteam game[]   @relation("game_team02IdToteam")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model teste {
+  id         BigInt   @id @default(autoincrement())
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user {
+  id      Int       @id(map: "user_duplicate_pkey") @default(autoincrement())
+  phone   String
+  clerkId String?   @unique(map: "user_duplicate_clerkId_idx")
+  birth   DateTime? @db.Date
+  cpf     String?
+  money   Float     @default(0)
+  bonus   Float     @default(0)
+}
