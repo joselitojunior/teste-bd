@@ -99,11 +99,8 @@ export const postRouter = createTRPCRouter({
 			// Insert data
 			if (leagueIds) {
 				var transactions: any = [];
-				var transactions2: any = [];
-				const userAwardsMoney: any = {};
-				const userAwardsBonus: any = {};
 
-				leagueIds.map((leagueId: any) => {
+				await Promise.all(leagueIds.map(async (leagueId: any) => {
 					const participationsInALeague = updatedParticipations?.filter((participation: any) => participation.leagueId === leagueId)
 					var lastPosition = 1;
 					var lastScore;
@@ -126,95 +123,121 @@ export const postRouter = createTRPCRouter({
 
 					const awardsInLeague = awards?.filter((award: any) => award.leagueId === leagueId) || []
 
-					const participationsWithAwards = participants.map((participation: any) => {
-						const clerkId = participation.clerkId;
+					// Add requests to transaction list
+					const notificationsData: any = [];
+
+					const usersBalance = await getAllUsers({
+						usersId: participants.map((participation: any) => participation.clerkId),
+						select: ['clerkId', 'money', 'bonus'],
+					});
+
+					console.log('participations: ', participants.length)
+
+					participants.map((participation: any) => {
 						const position = participation.position;
 						const paymentMethod = participation.payment;
-						var money = 0;
-						var bonus = 0;
-
 						const drawsQuantity = participants.filter((award: any) => award.position == position).length;
 						const award = Math.floor((awardsInLeague.filter((award: any) => award.position >= position && award.position < position + drawsQuantity).reduce((sum: any, award: any) => sum += award.award, 0) / drawsQuantity) * 100) / 100;
 
-						// Update money
-						if (paymentMethod == 'money') {
-							if (userAwardsMoney[clerkId]) {
-								userAwardsMoney[clerkId] += award;
-							} else {
-								userAwardsMoney[clerkId] = award;
-							}
-							money = award;
-						} else if (paymentMethod == 'bonus') {
-							if (userAwardsBonus[clerkId]) {
-								userAwardsBonus[clerkId] += award;
-							} else {
-								userAwardsBonus[clerkId] = award;
-							}
-							bonus = award;
-						} else if (paymentMethod == 'mixed') {
-							if (userAwardsMoney[clerkId]) {
-								userAwardsMoney[clerkId] += award / 2;
-							} else {
-								userAwardsMoney[clerkId] = award / 2;
-							}
-
-							if (userAwardsBonus[clerkId]) {
-								userAwardsBonus[clerkId] += award / 2;
-							} else {
-								userAwardsBonus[clerkId] = award / 2;
-							}
-							money = award / 2;
-							bonus = award / 2;
-						}
-
-						return { ...participation, money: money, bonus: bonus }
-					})
-
-					// Add requests to transaction list
-					const notificationsData: any = [];
-					const moneyTransactions: any = [];
-					const bonusTransactions: any = [];
-
-					participationsWithAwards.map((participation: any) => {
-						// Update participations
-						transactions2.push(prisma.participation.update({
-							where: { id: participation.id },
-							data: {
-								point: participation.score,
-								money: participation.money,
-								bonus: participation.bonus,
-								position: participation.position,
-							},
-						}));
-
 						// Add balances transactions (money and bonus)
-						if (participation.money || participation.bonus) {
-							if (participation.payment == 'money') {
-								moneyTransactions.push({
-									value: participation.money,
-									type: 'league_award',
-									clerkId: participation.clerkId,
-								});
-							} else if (participation.payment == 'bonus') {
-								bonusTransactions.push({
-									value: participation.bonus,
-									type: 'league_award',
-									clerkId: participation.clerkId,
-								});
-							} else if (participation.payment == 'mixed') {
-								moneyTransactions.push({
-									value: participation.money,
-									type: 'league_award',
-									clerkId: participation.clerkId,
-								});
+						if (award) {
+							const previousMoney = usersBalance?.find((user: any) => user.clerkId == participation.clerkId)?.money;
+							const previousBonus = usersBalance?.find((user: any) => user.clerkId == participation.clerkId)?.bonus;
 
-								bonusTransactions.push({
-									value: participation.bonus,
-									type: 'league_award',
-									clerkId: participation.clerkId,
-								});
+							// Update balance and movimentations
+							if (paymentMethod == 'money') {
+								const newMoney = previousMoney! + award;
+								transactions.push(
+									prisma.$transaction([
+										prisma.user.update({
+											where: { clerkId: participation.clerkId },
+											data: { money: newMoney, },
+										}),
+										prisma.moneyTransaction.create({
+											data: {
+												value: award,
+												type: 'league_award',
+												clerkId: participation.clerkId,
+											}
+										}),
+										prisma.participation.update({
+											where: { id: participation.id },
+											data: { money: award, },
+										})
+									])
+								);
+							} else if (paymentMethod == 'bonus') {
+								const newBonus = previousBonus! + award;
+								transactions.push(
+									prisma.$transaction([
+										prisma.user.update({
+											where: { clerkId: participation.clerkId },
+											data: { bonus: newBonus, },
+										}),
+										prisma.bonusTransaction.create({
+											data: {
+												value: award,
+												type: 'league_award',
+												clerkId: participation.clerkId,
+											}
+										}),
+										prisma.participation.update({
+											where: { id: participation.id },
+											data: { bonus: award, },
+										})
+									])
+								);
+							} else if (paymentMethod == 'mixed') {
+								const newMoney = previousMoney! + Number((award / 2).toFixed(2));
+								const newBonus = previousBonus! + Number((award / 2).toFixed(2));
+
+								transactions.push(
+									prisma.$transaction([
+										prisma.user.update({
+											where: { clerkId: participation.clerkId },
+											data: { money: newMoney, },
+										}),
+										prisma.user.update({
+											where: { clerkId: participation.clerkId },
+											data: { bonus: newBonus, },
+										}),
+										prisma.moneyTransaction.create({
+											data: {
+												value: Number((award / 2).toFixed(2)),
+												type: 'league_award',
+												clerkId: participation.clerkId,
+											}
+										}),
+										prisma.bonusTransaction.create({
+											data: {
+												value: Number((award / 2).toFixed(2)),
+												type: 'league_award',
+												clerkId: participation.clerkId,
+											}
+										}),
+										prisma.participation.update({
+											where: { id: participation.id },
+											data: { money: Number((award / 2).toFixed(2)), },
+										}),
+										prisma.participation.update({
+											where: { id: participation.id },
+											data: { bonus: Number((award / 2).toFixed(2)), },
+										})
+									])
+								);
 							}
 						}
+
+						// Update score and position
+						transactions.push(
+							prisma.participation.update({
+								where: { id: participation.id },
+								data: {
+									point: participation.score,
+									position: participation.position,
+								},
+							})
+						)
 
 						// Add notifications
 						notificationsData.push({ userId: participation.clerkId, message: 'Teste not', read: false });
@@ -224,95 +247,38 @@ export const postRouter = createTRPCRouter({
 					transactions.push(prisma.notification.createMany({
 						data: notificationsData,
 					}));
-
-					// Add balances transactions
-					transactions.push(prisma.moneyTransaction.createMany({
-						data: moneyTransactions,
-					}));
-
-					// Add balances transactions
-					transactions.push(prisma.bonusTransaction.createMany({
-						data: bonusTransactions,
-					}));
-				});
-
-
-				const userAwardsMoneyList = Object.keys(userAwardsMoney).map((key: string) => {
-					return {
-						clerkId: key,
-						value: userAwardsMoney[key]
-					};
-				});
-
-				const userAwardsBonusList = Object.keys(userAwardsBonus).map((key: string) => {
-					return {
-						clerkId: key,
-						value: userAwardsBonus[key]
-					};
-				});
-
-				const usersBalance = await getAllUsers({
-					usersId: [...userAwardsMoneyList?.map((user: any) => user.clerkId), ...userAwardsBonusList?.map((user: any) => user.clerkId)],
-					select: ['clerkId', 'money', 'bonus'],
-				});
-
-				userAwardsMoneyList.map((userAward: any, index: number) => {
-					const previousMoney = usersBalance?.find((user: any) => user.clerkId == userAward.clerkId)?.money;
-					const newMoney = previousMoney + userAward.value;
-
-					if (index == 41) {
-						console.log(previousMoney, newMoney, userAward.clerkId, userAward.value);
-					}
-
-					// if (index !== 41) {
-					transactions2.push(prisma.user.update({
-						where: { clerkId: userAward.clerkId },
-						data: {
-							money: newMoney,
-						},
-					}));
-					// }
-				});
-
-				userAwardsBonusList.map((userAward: any) => {
-					const previousBonus = usersBalance?.find((user: any) => user.clerkId == userAward.clerkId)?.bonus;
-					const newBonus = previousBonus + userAward.value;
-					transactions2.push(prisma.user.update({
-						where: { clerkId: userAward.clerkId },
-						data: {
-							bonus: newBonus,
-						},
-					}));
-				});
+				}));
 
 				console.log('transactions: ', transactions.length);
 
-				console.time('transactions');
+				const batchTransaction = async (transactions: any[]) => {
+					var qnt = 0;
+					const chunkSize = 50;
 
-				const promises = transactions.map(async (transaction: any, index: number) => {
-					const result = await transaction;
-					return result;
-				})
+					for (let i = 0; i < transactions.length; i += chunkSize) {
+						qnt++
+						const chunk = transactions.slice(i, i + chunkSize);
 
-				await Promise.all(promises);
+						console.time(`chunk-${qnt}`)
 
-				console.timeEnd('transactions');
+						// Run queries in chunk
+						const promises = chunk.map(async (transaction: any) => {
+							const result = await transaction;
+							return result;
+						})
 
-				console.time('transactions2');
-				const transactions2Filtered = transactions2.filter((tr: any, index: number) => index < 60)
+						await Promise.all(promises);
 
-				console.log('transactions2: ', transactions2.length);
+						console.timeEnd(`chunk-${qnt}`)
+					}
+				};
 
-				const promises2 = transactions2.map(async (transaction: any, index: number) => {
-					const result = await transaction;
-					return result;
-				})
+				console.time('Total time');
 
-				await Promise.all(promises2);
+				await batchTransaction(transactions);
 
-				console.timeEnd('transactions2');
+				console.timeEnd('Total time');
 			}
-
 
 			return 'ok';
 		}),
