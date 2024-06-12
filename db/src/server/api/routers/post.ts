@@ -264,7 +264,7 @@ export const postRouter = createTRPCRouter({
 
 				const batchTransaction = async (transactions: any[]) => {
 					var qnt = 0;
-					const chunkSize = 35;
+					const chunkSize = 45;
 
 					for (let i = 0; i < transactions.length; i += chunkSize) {
 						qnt++
