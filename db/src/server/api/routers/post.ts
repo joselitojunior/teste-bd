@@ -217,12 +217,12 @@ export const postRouter = createTRPCRouter({
 										}),
 										prisma.participation.update({
 											where: { id: participation.id },
-											data: { money: Number((award / 2).toFixed(2)), },
+											data: {
+												money: Number((award / 2).toFixed(2)),
+												bonus: Number((award / 2).toFixed(2)),
+											},
 										}),
-										prisma.participation.update({
-											where: { id: participation.id },
-											data: { bonus: Number((award / 2).toFixed(2)), },
-										})
+
 									])
 								);
 							}
