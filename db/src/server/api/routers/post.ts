@@ -162,7 +162,11 @@ export const postRouter = createTRPCRouter({
 										}),
 										prisma.participation.update({
 											where: { id: participation.id },
-											data: { money: award, },
+											data: {
+												money: award,
+												point: participation.score,
+												position: participation.position,
+											},
 										})
 									])
 								);
@@ -183,7 +187,11 @@ export const postRouter = createTRPCRouter({
 										}),
 										prisma.participation.update({
 											where: { id: participation.id },
-											data: { bonus: award, },
+											data: {
+												bonus: award,
+												point: participation.score,
+												position: participation.position,
+											},
 										})
 									])
 								);
@@ -220,24 +228,27 @@ export const postRouter = createTRPCRouter({
 											data: {
 												money: Number((award / 2).toFixed(2)),
 												bonus: Number((award / 2).toFixed(2)),
+												point: participation.score,
+												position: participation.position,
 											},
 										}),
 
 									])
 								);
 							}
+						} else {
+							transactions.push(
+								prisma.participation.update({
+									where: { id: participation.id },
+									data: {
+										point: participation.score,
+										position: participation.position,
+										money: 0,
+										bonus: 0,
+									},
+								})
+							)
 						}
-
-						// Update score and position
-						transactions.push(
-							prisma.participation.update({
-								where: { id: participation.id },
-								data: {
-									point: participation.score,
-									position: participation.position,
-								},
-							})
-						)
 
 						// Add notifications
 						notificationsData.push({ userId: participation.clerkId, message: 'Teste not', read: false });
